@@ -1,3 +1,5 @@
+# modified by Sooky Peter <xsooky00@stud.fit.vutbr.cz>
+# Brno University of Technology, Faculty of Information Technology
 import struct
 import socket
 import time
@@ -15,6 +17,8 @@ import random
 from conpot.protocols.modbus import slave_db
 import conpot.core as conpot_core
 
+import ConfigParser
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,16 +26,35 @@ class ModbusServer(modbus.Server):
 
     def __init__(self, template, template_directory, args, timeout=5):
 
+        self.config = args.config
         self.timeout = timeout
+        self.delay = None
+        self.mode = None
         databank = slave_db.SlaveBase(template)
 
         # Constructor: initializes the server settings
         modbus.Server.__init__(self, databank if databank else modbus.Databank())
 
+        self._setup()
+
         # not sure how this class remember slave configuration across instance creation, i guess there are some
         # well hidden away class variables somewhere.
         self.remove_all_slaves()
         self._configure_slaves(template)
+
+    def _setup(self):
+        # read the modbus connection settings from the configuration file, in case of improper usage terminate the program
+        config = ConfigParser.ConfigParser()
+        config.read(self.config)
+        self.mode = config.get('modbus','mode')
+        try:
+            if str(self.mode).lower() != 'tcp' and str(self.mode).lower() != 'serial':
+                logger.error('Conpot modbus initialization failed due to incorrect settings. Check the configuration file')
+                sys.exit(3)
+        except (AttributeError):
+            logger.error('Could not initialize modbus with current settings. Check configuration file.')
+            sys.exit(3)
+
 
     def _configure_slaves(self, template):
         dom = etree.parse(template)
@@ -85,8 +108,23 @@ class ModbusServer(modbus.Server):
 
                 logger.debug('Modbus traffic from %s: %s (%s)', address[0], logdata, session.id)
 
-                if response:
-                    sock.sendall(response)
+                if self.mode == 'tcp':
+                    if logdata['slave_id'] == 0 and response:
+                        sock.sendall(response)
+                        logger.debug('Modbus response sent to %s: %s (%s)', address[0], logdata, session.id)
+                    if logdata['slave_id'] == 255 and response:
+                        sock.sendall(response)
+                        logger.debug('Modbus response sent to %s: %s (%s)', address[0], logdata, session.id)
+                elif self.mode == 'serial':
+                    # no response is sent to the slaves
+                    if logdata['slave_id'] == 0:
+                        # sock.sendall(response)
+                        logger.debug('Modbus broadcast %s: %s (%s)', address[0], logdata, session.id)
+                        time.sleep(self.delay/1000)
+                        logger.debug('Modbus server\'s turnaround delay expired.')
+                    if logdata['slave_id'] > 0 and logdata['slave_id'] <= 247 and response:
+                        sock.sendall(response)
+                        logger.debug('Modbus response sent to %s: %s (%s)', address[0], logdata, session.id)
         except socket.timeout:
             logger.debug('Socket timeout, remote: %s. (%s)', address[0], session.id)
             session.add_event({'type': 'CONNECTION_LOST'})

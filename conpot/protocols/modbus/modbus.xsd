@@ -12,6 +12,7 @@
                         </xs:sequence>
                     </xs:complexType>
                 </xs:element>
+                <xs:element type="xs:byte" name="delay"/>
                 <xs:element name="slaves">
                     <xs:complexType>
                         <xs:sequence>
@@ -53,7 +54,7 @@
                                             </xs:complexType>
                                         </xs:element>
                                     </xs:sequence>
-                                    <xs:attribute type="xs:byte" name="id" use="required"/>
+                                    <xs:attribute type="xs:short" name="id" use="required"/>
                                 </xs:complexType>
                             </xs:element>
                         </xs:sequence>

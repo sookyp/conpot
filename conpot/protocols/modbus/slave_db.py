@@ -1,3 +1,5 @@
+# modified by Sooky Peter <xsooky00@stud.fit.vutbr.cz>
+# Brno University of Technology, Faculty of Information Technology
 import struct
 from lxml import etree
 
@@ -20,7 +22,7 @@ class SlaveBase(Databank):
         """
         Add a new slave with the given id
         """
-        if (slave_id <= 0) or (slave_id > 255):
+        if (slave_id < 0) or (slave_id > 255):
             raise Exception("Invalid slave id %d" % slave_id)
         if not slave_id in self._slaves:
             self._slaves[slave_id] = MBSlave(slave_id, self.dom)
@@ -54,11 +56,12 @@ class SlaveBase(Databank):
                 # make the full response
                 response = query.build_response(response_pdu)
             # get the slave and let him execute the action
-            elif slave_id == 0:
-                # broadcast
+            elif slave_id == 0 and mode=='serial':
                 for key in self._slaves:
-                    response_pdu = self._slaves[key].handle_request(request_pdu, broadcast=True)
-                    response = query.build_response(response_pdu)
+                    self._slaves[key].handle_request(request_pdu, broadcast=True)
+            elif slave_id == 0 and mode=='tcp':
+                response_pdu = slave.handle_request(request_pdu)
+                response = query.build_response(response_pdu)
             elif slave_id == 255:
                 r = struct.pack(">BB", func_code + 0x80, 0x0B)
                 response = query.build_response(r)
