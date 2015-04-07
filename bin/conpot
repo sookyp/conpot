@@ -16,6 +16,9 @@
 # Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+# modified by Peter Sooky <xsooky00@stud.fit.vubtr.cz>
+# Brno University of Technology, Faculty of Information Technology
+
 import gevent.monkey
 gevent.monkey.patch_all()
 
@@ -41,6 +44,7 @@ from conpot.protocols.snmp.snmp_server import SNMPServer
 from conpot.protocols.modbus.modbus_server import ModbusServer
 from conpot.protocols.s7comm.s7_server import S7Server
 from conpot.protocols.http.web_server import HTTPServer
+from conpot.protocols.bacnet.bacnet_server import BacnetServer
 from conpot.helpers import fix_sslwrap
 from conpot.protocols.kamstrup.meter_protocol.kamstrup_server import KamstrupServer
 from conpot.protocols.kamstrup.management_protocol.kamstrup_management_server import KamstrupManagementServer
@@ -246,7 +250,8 @@ def main():
         ('kamstrup_meter', KamstrupServer),
         ('kamstrup_management', KamstrupManagementServer),
         ('http', HTTPServer),
-        ('snmp', SNMPServer)
+        ('snmp', SNMPServer),
+        ('bacnet', BacnetServer)
     )
     pid = gevent.fork()
     if pid == 0:

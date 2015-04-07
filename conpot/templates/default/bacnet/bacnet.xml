@@ -1,0 +1,26 @@
+<bacnet enabled="True" host="0.0.0.0" port="47808">
+    <device_info>
+        <device_name>SystemName</device_name>
+        <device_identifier>BacnetIdentifier</device_identifier>
+        <max_apdu_length>BacnetApduLength</max_apdu_length>
+        <segmentation_support>BacnetSegmentation</segmentation_support>
+        <vendor_identification>BacnetVendor</vendor_identification>
+    </device_info>
+    <object_list>
+        <object name="objectBinary">
+            <properties>
+                <object_identifier>12</object_identifier>
+                <object_name>BI 01</object_name>
+                <object_type>Binary Input</object_type>
+            </properties>
+        </object>
+        <object name="objectAnalog">
+            <properties>
+                <object_identifier>14</object_identifier>
+                <object_name>AI 01</object_name>
+                <object_type>Analog Input</object_type>
+                <present_value>68.0</present_value>
+            </properties>
+        </object>
+    </object_list>
+</bacnet>
