@@ -102,29 +102,30 @@ class ModbusServer(modbus.Server):
                 query = modbus_tcp.TcpQuery()
 
                 # logdata is a dictionary containing request, slave_id, function_code and response
-                response, logdata = self._databank.handle_request(query, request)
+                response, logdata = self._databank.handle_request(query, request, self.mode)
                 logdata['request'] = request.encode('hex')
+
                 session.add_event(logdata)
 
-                logger.debug('Modbus traffic from %s: %s (%s)', address[0], logdata, session.id)
-
-                if self.mode == 'tcp':
-                    if logdata['slave_id'] == 0 and response:
-                        sock.sendall(response)
-                        logger.debug('Modbus response sent to %s: %s (%s)', address[0], logdata, session.id)
-                    if logdata['slave_id'] == 255 and response:
-                        sock.sendall(response)
-                        logger.debug('Modbus response sent to %s: %s (%s)', address[0], logdata, session.id)
-                elif self.mode == 'serial':
-                    # no response is sent to the slaves
-                    if logdata['slave_id'] == 0:
-                        # sock.sendall(response)
-                        logger.debug('Modbus broadcast %s: %s (%s)', address[0], logdata, session.id)
-                        time.sleep(self.delay/1000)
+                logger.info('Modbus traffic from {0}: {1} ({2})'.format(address[0], logdata, session.id))
+                if response:
+                    sock.sendall(response)
+                    logger.info('Modbus response sent to {0}'.format(address[0]))
+                else:
+                    # MB serial connection addressing UID=0
+                    if (self.mode == 'serial' and logdata['slave_id'] == 0):
+                        time.sleep(self.delay/1000) # millisecs
                         logger.debug('Modbus server\'s turnaround delay expired.')
-                    if logdata['slave_id'] > 0 and logdata['slave_id'] <= 247 and response:
-                        sock.sendall(response)
-                        logger.debug('Modbus response sent to %s: %s (%s)', address[0], logdata, session.id)
+                        # disconnecting in the next loop
+                        continue
+                    # Invalid addressing
+                    else:
+                        logger.info('Client ignored due to invalid addressing. ({0})'.format(session.id))
+                        session.add_event({'type': 'CONNECTION_LOST'})
+                        sock.shutdown(socket.SHUT_RDWR)
+                        sock.close()
+                        break
+
         except socket.timeout:
             logger.debug('Socket timeout, remote: %s. (%s)', address[0], session.id)
             session.add_event({'type': 'CONNECTION_LOST'})

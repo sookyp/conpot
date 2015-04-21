@@ -30,7 +30,7 @@ class SlaveBase(Databank):
         else:
             raise DuplicatedKeyError("Slave %d already exists" % slave_id)
 
-    def handle_request(self, query, request):
+    def handle_request(self, query, request, mode):
         """
         Handles a request. Return value is a tuple where element 0 is the response object and element 1 is a dictionary
         of items to log.
@@ -56,20 +56,38 @@ class SlaveBase(Databank):
                 # make the full response
                 response = query.build_response(response_pdu)
             # get the slave and let him execute the action
-            elif slave_id == 0 and mode=='serial':
-                for key in self._slaves:
-                    self._slaves[key].handle_request(request_pdu, broadcast=True)
-            elif slave_id == 0 and mode=='tcp':
-                response_pdu = slave.handle_request(request_pdu)
-                response = query.build_response(response_pdu)
-            elif slave_id == 255:
-                r = struct.pack(">BB", func_code + 0x80, 0x0B)
-                response = query.build_response(r)
-            else:
-                slave = self.get_slave(slave_id)
-                response_pdu = slave.handle_request(request_pdu)
-                # make the full response
-                response = query.build_response(response_pdu)
+            elif mode == 'tcp':
+                if slave_id == 0:
+                    slave = self.get_slave(slave_id)
+                    response_pdu = slave.handle_request(request_pdu)
+                    response = query.build_response(response_pdu)
+                elif slave_id == 255:
+                    r = struct.pack(">BB", func_code + 0x80, 0x0B)
+                    response = query.build_response(r)
+                else:
+                    return ( None, {'request': request_pdu.encode('hex'),
+                           'slave_id': slave_id,
+                           'function_code': func_code,
+                           'response': ''})
+            elif mode == 'serial':
+                if slave_id == 0:
+                    for key in self._slaves:
+                        self._slaves[key].handle_request(request_pdu, broadcast=True)
+                    # no response should be sent
+                    return ( None, {'request': request_pdu.encode('hex'),
+                           'slave_id': slave_id,
+                           'function_code': func_code,
+                           'response': ''})
+                elif slave_id > 0 and slave_id <= 247:
+                    slave = self.get_slave(slave_id)
+                    response_pdu = slave.handle_request(request_pdu)
+                    # make the full response
+                    response = query.build_response(response_pdu)
+                else:
+                    return ( None, {'request': request_pdu.encode('hex'),
+                           'slave_id': slave_id,
+                           'function_code': func_code,
+                           'response': ''})
         except (IOError, MissingKeyError) as e:
             # If the request was not handled correctly, return a server error response
             r = struct.pack(">BB", func_code + 0x80, defines.SLAVE_DEVICE_FAILURE)
