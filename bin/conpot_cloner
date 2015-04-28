@@ -88,8 +88,10 @@ class ConpotCloner(object):
             '1.3.6.1.4.1.311.1.7.3.1.22.0': "NotFoundErrors"
         }
 
-    def mock_callback(self, sendRequestHandle, errorIndication, errorStatus, errorIndex, varBindTable, cbCtx):
-        # return values are used for signaling the I/O dispatcher (0=stop; 1=continue)
+    def mock_callback(self, sendRequestHandle, errorIndication,
+                      errorStatus, errorIndex, varBindTable, cbCtx):
+        # return values are used for signaling the I/O dispatcher
+        # (0=stop; 1=continue)
         if not hasattr(self, 'result'):
             self.result = ""
         if errorIndication:
@@ -98,8 +100,8 @@ class ConpotCloner(object):
         if errorStatus and errorStatus != 2:
             print('%s at %s' % (
                 errorStatus.prettyPrint(),
-                errorIndex and varBindTable[-1][int(errorIndex)-1] or '?'
-                )
+                errorIndex and varBindTable[-1][int(errorIndex) - 1] or '?'
+            )
             )
             return
         for varBindRow in varBindTable:
@@ -107,21 +109,24 @@ class ConpotCloner(object):
             if type(varBindRow) is list:
                 for oid, val in varBindRow:
                     if isinstance(val, EndOfMibView):
-                        self.result+='%s\n' % (val.prettyPrint())
+                        self.result += '%s\n' % (val.prettyPrint())
                         return 0
-                    self.result+='%s = %s\n' % (oid.prettyPrint(), val.prettyPrint())
+                    self.result += '%s = %s\n' % \
+                        (oid.prettyPrint(), val.prettyPrint())
             # get command
             elif type(varBindRow) is tuple:
                 oid, val = varBindRow
                 if isinstance(val, EndOfMibView):
-                    self.result+='%s\n' % (val.prettyPrint())
+                    self.result += '%s\n' % (val.prettyPrint())
                     return 0
-                self.result+='%s = %s\n' % (oid.prettyPrint(), val.prettyPrint())
+                self.result += '%s = %s\n' % \
+                    (oid.prettyPrint(), val.prettyPrint())
         return 1
 
     def modbus_read_coils(self, master, slave=1):
         try:
-            actual_bits = master.execute(slave=slave, function_code=cst.READ_COILS,
+            actual_bits = master.execute(slave=slave,
+                                         function_code=cst.READ_COILS,
                                          starting_address=1, quantity_of_x=128)
         except:
             pass
@@ -154,5 +159,5 @@ class ConpotCloner(object):
 
 if __name__ == "__main__":
     cloner = ConpotCloner()
-    #cloner.modbus_worker()
+    # cloner.modbus_worker()
     cloner.snmp_walk()
