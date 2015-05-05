@@ -116,12 +116,15 @@ class ModbusServer(modbus.Server):
                     if (self.mode == 'serial' and logdata['slave_id'] == 0):
                         time.sleep(self.delay/1000) # millisecs
                         logger.debug('Modbus server\'s turnaround delay expired.')
-                        # disconnecting in the next loop
-                        continue
+                        logger.info('Connection terminated with client {0}.'.format(address[0]))
+                        session.add_event({'type': 'CONNECTION_TERMINATED'})
+                        sock.shutdown(socket.SHUT_RDWR)
+                        sock.close()
+                        break
                     # Invalid addressing
                     else:
                         logger.info('Client ignored due to invalid addressing. ({0})'.format(session.id))
-                        session.add_event({'type': 'CONNECTION_LOST'})
+                        session.add_event({'type': 'CONNECTION_TERMINATED'})
                         sock.shutdown(socket.SHUT_RDWR)
                         sock.close()
                         break

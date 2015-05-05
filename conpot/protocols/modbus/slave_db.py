@@ -73,6 +73,9 @@ class SlaveBase(Databank):
                 if slave_id == 0:
                     for key in self._slaves:
                         self._slaves[key].handle_request(request_pdu, broadcast=True)
+                        if response_pdu == -1:
+                            # if the request is not broadcastable
+                            break
                     # no response should be sent
                     return ( None, {'request': request_pdu.encode('hex'),
                            'slave_id': slave_id,

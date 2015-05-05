@@ -1,5 +1,9 @@
+# modified by Sooky Peter <xsooky00@stud.fit.vutbr.cz>
+# Brno University of Technology, Faculty of Information Technology
 import struct
 import logging
+
+import traceback, sys
 
 from modbus_tk.modbus import Slave, ModbusError, ModbusInvalidRequestError, InvalidArgumentError, DuplicatedKeyError,\
                              InvalidModbusBlockError, OverlapModbusBlockError
@@ -76,7 +80,10 @@ class MBSlave(Slave):
                 can_broadcast = [defines.WRITE_MULTIPLE_COILS, defines.WRITE_MULTIPLE_REGISTERS,
                                  defines.WRITE_SINGLE_COIL, defines.WRITE_SINGLE_REGISTER]
                 if broadcast and (self.function_code not in can_broadcast):
-                    raise ModbusInvalidRequestError("Function %d can not be broadcasted" % self.function_code)
+                    # don't print the whole stack trace
+                    trace_stack = traceback.format_exception_only(ModbusInvalidRequestError,"Function %d can not be broadcasted" % self.function_code)
+                    logger.error(trace_stack[0])
+                    return -1
 
                 # execute the corresponding function
                 try:
