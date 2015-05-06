@@ -19,7 +19,7 @@
                 <object_identifier>14</object_identifier>
                 <object_name>AI 01</object_name>
                 <object_type>Analog Input</object_type>
-                <present_value>68.0</present_value>
+                <present_value>45.0:50.0</present_value>
             </properties>
         </object>
     </object_list>
