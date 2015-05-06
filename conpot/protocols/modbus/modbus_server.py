@@ -4,6 +4,7 @@ import struct
 import socket
 import time
 import logging
+import sys
 
 from lxml import etree
 from gevent.server import StreamServer
