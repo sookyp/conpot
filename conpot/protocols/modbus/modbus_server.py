@@ -59,6 +59,7 @@ class ModbusServer(modbus.Server):
 
     def _configure_slaves(self, template):
         dom = etree.parse(template)
+        self.delay = int(dom.xpath('//modbus/delay/text()')[0])
         slaves = dom.xpath('//modbus/slaves/*')
         for s in slaves:
             slave_id = int(s.attrib['id'])
