@@ -50,7 +50,7 @@
                 <value type="value">[random.randint(0,1) for b in range(0,32)]</value>
             </key>
             <key name="memoryModbusSlave3BlockA">
-                <value type="value">[0 for b in range(0,32)]</value>
+                <value type="value">[random.randint(0,1) for b in range(0,128)]</value>
             </key>
             <key name="memoryModbusSlave3BlockB">
                 <value type="value">[random.randint(0,1) for b in range(0,32)]</value>

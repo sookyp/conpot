@@ -15,6 +15,10 @@ from modbus_tk import modbus
 import modbus_tk.defines as mdef
 import random
 
+from modbus_tk.modbus import ModbusInvalidRequestError, InvalidArgumentError, DuplicatedKeyError,\
+                             InvalidModbusBlockError, OverlapModbusBlockError
+
+
 from conpot.protocols.modbus import slave_db
 import conpot.core as conpot_core
 
@@ -59,22 +63,26 @@ class ModbusServer(modbus.Server):
 
     def _configure_slaves(self, template):
         dom = etree.parse(template)
+        self.delay = int(dom.xpath('//modbus/delay/text()')[0])
         slaves = dom.xpath('//modbus/slaves/*')
-        for s in slaves:
-            slave_id = int(s.attrib['id'])
-            slave = self.add_slave(slave_id)
-            logger.debug('Added slave with id %s.', slave_id)
-            for b in s.xpath('./blocks/*'):
-                name = b.attrib['name']
-                request_type = eval('mdef.' + b.xpath('./type/text()')[0])
-                start_addr = int(b.xpath('./starting_address/text()')[0])
-                size = int(b.xpath('./size/text()')[0])
-                slave.add_block(name, request_type, start_addr, size)
-                logger.debug(
-                    'Added block %s to slave %s. (type=%s, start=%s, size=%s)',
-                    name, slave_id, request_type, start_addr, size)
+        try:
+            for s in slaves:
+                slave_id = int(s.attrib['id'])
+                slave = self.add_slave(slave_id)
+                logger.debug('Added slave with id {0}.'.format(slave_id))
+                for b in s.xpath('./blocks/*'):
+                    name = b.attrib['name']
+                    request_type = eval('mdef.' + b.xpath('./type/text()')[0])
+                    start_addr = int(b.xpath('./starting_address/text()')[0])
+                    size = int(b.xpath('./size/text()')[0])
+                    slave.add_block(name, request_type, start_addr, size)
+                    logger.debug('Added block {0} to slave {1}. (type={2}, start={3}, size={4})'.format(
+                        name, slave_id, request_type, start_addr, size
+                    ))
 
-        logger.info('Conpot modbus initialized')
+            logger.info('Conpot modbus initialized')
+        except (Exception, DuplicatedKeyError) as e:
+            logger.info(e)
 
     def handle(self, sock, address):
         sock.settimeout(self.timeout)
