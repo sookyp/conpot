@@ -45,6 +45,7 @@ from conpot.protocols.modbus.modbus_server import ModbusServer
 from conpot.protocols.s7comm.s7_server import S7Server
 from conpot.protocols.http.web_server import HTTPServer
 from conpot.protocols.bacnet.bacnet_server import BacnetServer
+from conpot.protocols.ipmi.ipmi_server import IpmiServer
 from conpot.helpers import fix_sslwrap
 from conpot.protocols.kamstrup.meter_protocol.kamstrup_server import KamstrupServer
 from conpot.protocols.kamstrup.management_protocol.kamstrup_management_server import KamstrupManagementServer
@@ -251,7 +252,8 @@ def main():
         ('kamstrup_management', KamstrupManagementServer),
         ('http', HTTPServer),
         ('snmp', SNMPServer),
-        ('bacnet', BacnetServer)
+        ('bacnet', BacnetServer),
+        ('ipmi', IpmiServer)
     )
     pid = gevent.fork()
     if pid == 0:
