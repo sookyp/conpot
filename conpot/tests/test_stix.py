@@ -31,28 +31,32 @@ from conpot.tests.helpers.mitre_stix_validator import STIXValidator
 
 class TestLoggers(unittest.TestCase):
 
-    def test_taxii(self):
+    def test_stix_transform(self):
         """
-        Objective: Test if we can transmit data to MITRE's TAXII test server.
-        Note: This actually also tests the StixTransformer since the event is parsed by the transformer
-        before transmission.
+        Objective: Test if our STIX xml can be validated.
         """
         config = ConfigParser()
         config_file = os.path.join(os.path.dirname(__file__), '../conpot.cfg')
         config.read(config_file)
-        config.set('taxii', 'enabled', True)
+        config.set('stix', 'enabled', True)
+        config.set('stix', 'contact_name', 'conpot')
+        config.set('stix', 'contact_domain', 'http://conpot.org/stix-1')
 
         test_event = {'remote': ('127.0.0.1', 54872), 'data_type': 's7comm',
-                      'timestamp': datetime.now(),
                       'public_ip': '111.222.111.222',
+                      'timestamp': datetime.now(),
                       'session_id': str(uuid.uuid4()),
                       'data': {0: {'request': 'who are you', 'response': 'mr. blue'},
                                1: {'request': 'give me apples', 'response': 'no way'}}}
         dom = etree.parse('conpot/templates/default/template.xml')
-        taxiiLogger = TaxiiLogger(config, dom)
-        taxii_result = taxiiLogger.log(test_event)
-        # TaxiiLogger returns false if the message could not be delivered
-        self.assertTrue(taxii_result)
+        stixTransformer = StixTransformer(config, dom)
+        stix_package_xml = stixTransformer.transform(test_event)
+        xmlValidator = STIXValidator(None, True, False)
+        result_dict = xmlValidator.validate(StringIO(stix_package_xml.encode('utf-8')))
+        errors = ''
+        if 'errors' in result_dict:
+            errors = ', '.join(result_dict['errors'])
+        self.assertTrue(result_dict['result'], 'Error while validations STIX xml: {0}'. format(errors))
 
 if __name__=="__main__":
     unittest.main()

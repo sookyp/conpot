@@ -15,6 +15,9 @@
 # Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+# modified by Sooky Peter <xsooky00@stud.fit.vutbr.cz>
+# Brno University of Technology, Faculty of Information Technology
+
 import json
 import ast
 import textwrap
@@ -44,11 +47,29 @@ from datetime import datetime
 
 import conpot
 
+import os
+import xml.etree.ElementTree as ET
+
 
 class StixTransformer(object):
     def __init__(self, config, dom):
-        self.config = config._sections['taxii']
+        self.config = config._sections['stix']
+        # retrieve all protocols from template.xml
+        protocol_list = dom.xpath('//core/template/entity[@name="protocols"]').pop().text.lower().split(',')
+        # get the template xml files
+        package_directory = os.path.dirname(os.path.abspath(conpot.__file__))
+        template_root_dir = os.path.join(package_directory, 'templates/default/')
+        template_files = [template_root_dir+p.strip()+'/'+p.strip()+'.xml' for p in protocol_list]
+        # filter all the disabled protocols
+        self.protocol_to_port_mapping = dict()
+        for template in template_files:
+            tree = ET.parse(template)
+            protocol = tree.getroot()
+            if protocol.attrib['enabled'] == 'True':
+                self.protocol_to_port_mapping[protocol.tag] = int(protocol.attrib['port'])
+
         # This should not be hardcoded
+        """        
         port_path_list = [
             '//conpot_template/protocols/modbus/@port',
             '//conpot_template/protocols/snmp/@port',
@@ -68,6 +89,7 @@ class StixTransformer(object):
                 self.protocol_to_port_mapping[protocol_name] = protocol_port
             except IndexError:
                 continue
+        """
         print self.protocol_to_port_mapping
 
     def _set_namespace(self, domain, name):
