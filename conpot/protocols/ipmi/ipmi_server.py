@@ -172,7 +172,7 @@ class IpmiServer(object):
         bodydata = struct.unpack('B' * len(header[17:]), header[17:])
         header += chr(self._checksum(*bodydata))
         self.session.stage += 1
-        logger.debug('Connection established with {0}'.format(sockaddr))
+        logger.info('Connection established with {0}'.format(sockaddr))
         self.session.send_data(header, sockaddr)
 
     def close_server_session(self):
@@ -332,11 +332,11 @@ class IpmiServer(object):
                     self.clientpriv = request['data'][0]
             self.session._send_ipmi_net_payload(code=returncode,
                                         data=[self.clientpriv])
-            logger.debug('IPMI response sent (Set Session Privilege) to {0}'.format(self.session.sockaddr))
+            logger.info('IPMI response sent (Set Session Privilege) to {0}'.format(self.session.sockaddr))
         elif request['netfn'] == 6 and request['command'] == 0x3c:
             # close session
             self.session.send_ipmi_response()
-            logger.debug('IPMI response sent (Close Session) to {0}'.format(self.session.sockaddr))
+            logger.info('IPMI response sent (Close Session) to {0}'.format(self.session.sockaddr))
             self.close_server_session()
         elif request['netfn'] == 6 and request['command'] == 0x44:
             # get user access
@@ -361,7 +361,7 @@ class IpmiServer(object):
             data.append(self.channelaccess)
             self.session._send_ipmi_net_payload(code=returncode,
                                         data=data)
-            logger.debug('IPMI response sent (Get User Access) to {0}'.format(self.session.sockaddr))
+            logger.info('IPMI response sent (Get User Access) to {0}'.format(self.session.sockaddr))
         elif request['netfn'] == 6 and request['command'] == 0x46:
             # get user name
             userid = request['data'][0]
@@ -373,10 +373,28 @@ class IpmiServer(object):
                 data.append(0)
             self.session._send_ipmi_net_payload(code=returncode,
                                         data=data)
-            logger.debug('IPMI response sent (Get User Name) to {0}'.format(self.session.sockaddr))
-        else:
-            # netfn == 6 || netfn == 0; application || chassis
+            logger.info('IPMI response sent (Get User Name) to {0}'.format(self.session.sockaddr))
+        elif request['netfn'] == 6 and request['command'] == 0x45:
+            # set user name
+            userid = request['data'][0]
+            username = ''.join(chr(x) for x in request['data'][1:]).strip('\x00')
+            oldname = self.authdata.keys()[userid-1]
+            self.authdata[username] = self.authdata[self.authdata.keys()[userid-1]]
+            self.privdata[username] = self.privdata[oldname]
+            self.channelaccessdata[username] = self.channelaccessdata[oldname]
+            del self.authdata[oldname]
+            del self.privdata[oldname]
+            del self.channelaccessdata[oldname]
+            returncode = 0
+            self.session._send_ipmi_net_payload(code=returncode)
+            logger.info('IPMI response sent (Set User Name) to {0}'.format(self.session.sockaddr))
+        elif request['netfn'] in [0, 6] and request['command'] in [1,2,8,9]:
             self.bmc.handle_raw_request(request, self.session)
+        else:
+            returncode = 0xc1
+            self.session._send_ipmi_net_payload(code=returncode)
+            logger.info('IPMI unrecognized command from {0}'.format(self.session.sockaddr))
+            logger.debug('IPMI response sent (Invalid Command) to {0}'.format(self.session.sockaddr))
 
     def start(self, host, port):
         connection = (host, port)
