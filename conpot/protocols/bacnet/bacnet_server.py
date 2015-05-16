@@ -9,18 +9,22 @@ import socket
 
 from lxml import etree
 
-from bacpypes.comm import Server
 from gevent.server import DatagramServer
+
+import bacpypes.object
 
 from bacpypes.app import LocalDeviceObject, BIPSimpleApplication
 from bacpypes.pdu import GlobalBroadcast
 
 from bacpypes.apdu import APDU, apdu_types, confirmed_request_types, complex_ack_types, unconfirmed_request_types, error_types, ConfirmedRequestPDU, UnconfirmedRequestPDU, SimpleAckPDU, ComplexAckPDU, ErrorPDU, RejectPDU, IAmRequest, IHaveRequest, ReadPropertyACK, ConfirmedServiceChoice, UnconfirmedServiceChoice
 
-from bacpypes.object import *
+from bacpypes.basetypes import *
 from bacpypes.primitivedata import *
+from bacpypes.constructeddata import Any
 
 import conpot.core as conpot_core
+
+import ast
 
 logger = logging.getLogger(__name__)
 bacnet_app = None
@@ -39,59 +43,47 @@ class BACnetApp(BIPSimpleApplication):
         self.objectIdentifier = {device.objectIdentifier: device}
         self.sock = sock
 
-    def _setup(self, dom):
-        property_list = []
-        property_name_list = []
-        bacnet_object_list = []
-        # parse the bacnet template for objects
+    def _get_objects_and_properties(self, dom):
+        # parse the bacnet template for objects and their properties
+        device_property_list = dom.xpath('//bacnet/device_info/*')
+        for prop in device_property_list:
+            prop_key = prop.tag.lower().title()
+            prop_key = re.sub("['_','-']", "", prop_key)
+            prop_key = prop_key[0].lower() + prop_key[1:]
+            if prop_key not in self.localDevice.propertyList.value and \
+                prop_key not in ['deviceIdentifier', 'deviceName']:
+                self.add_property(prop_key, prop.text)
+
         object_list = dom.xpath('//bacnet/object_list/object/@name')
         for obj in object_list:
-            property_list.insert(object_list.index(obj), dom.xpath(
-                '//bacnet/object_list/object[@name="{0}"]/properties/*'.format(obj)))
-            for prop in property_list[object_list.index(obj)]:
-                property_name_list.insert(
-                    property_list[object_list.index(obj)].index(prop), {prop.tag: prop.text})
-                if ('object_type' in property_name_list[property_list[object_list.index(obj)].index(prop)].keys()[0]):
-                    object_type = property_name_list[
-                        property_list[object_list.index(obj)].index(prop)].values()[0]
-                    object_type = re.sub('-', ' ', object_type)
-                    object_type = object_type.lower().title()
-                    object_type = re.sub(' ', '', object_type) + 'Object'
-                    bacnet_object_list.insert(
-                        object_list.index(obj), object_type)
+            property_list = dom.xpath('//bacnet/object_list/object[@name="{0}"]/properties/*'.format(obj))
+            for prop in property_list:
+                if prop.tag == 'object_type':
+                    object_type = re.sub('-',' ',prop.text).lower().title()
+                    object_type = re.sub(' ','',object_type)+'Object'
             try:
-                # create the BACnet objects
-                device_object = getattr(
-                    sys.modules[__name__], bacnet_object_list[object_list.index(obj)])()
-            except (NameError):
-                logger.critical('ERROR: Non-existent BACnet object type function \"{0}()\". Check template file.'.format(
-                    bacnet_object_list[object_list.index(obj)]))
+                device_object = getattr(bacpypes.object, object_type)()
+            except NameError:
+                logger.critical('Non-existent BACnet object type')
                 sys.exit(3)
-            #
-            for prop in property_list[object_list.index(obj)]:
-                bacnet_property_list = property_name_list[
-                    property_list[object_list.index(obj)].index(prop)]
-                bacnet_property_list_keys = bacnet_property_list.keys()[
-                    0].lower().title()
-                bacnet_property_list_values = bacnet_property_list.values()[0]
-                bacnet_property_list_keys = re.sub(
-                    "['_','-']", '', bacnet_property_list_keys)
-                bacnet_property_list_keys = bacnet_property_list_keys[
-                    0].lower() + bacnet_property_list_keys[1:]
-                # assign the values to the properties and assign the properties
-                # to the objects
-                if (bacnet_property_list_keys == "objectIdentifier"):
-                    device_object.objectIdentifier = int(
-                        bacnet_property_list_values)
-                else:
-                    try:
-                        setattr(
-                            device_object, bacnet_property_list_keys, bacnet_property_list_values)
-                    except (PropertyError):
-                        logger.critical(
-                            'ERROR: Non-existent BACnet property type \"{0}\". Check template file.'.format(bacnet_property_list_keys))
-                        sys.exit(3)
-            # add the objects to the device
+            for prop in property_list:
+                prop_key = prop.tag.lower().title()
+                prop_key = re.sub("['_','-']", "", prop_key)
+                prop_key = prop_key[0].lower() + prop_key[1:]
+                if prop_key == 'objectType':
+                    prop_val = prop.text.lower().title()
+                    prop_val = re.sub(" ", "", prop_val)
+                    prop_val = prop_val[0].lower() + prop_val[1:]
+                prop_val = prop.text
+                try:
+                    if prop_key == 'objectIdentifier':
+                        device_object.objectIdentifier = int(prop_val)
+                    else:
+                        setattr(device_object, prop_key, prop_val)
+                        device_object.propertyList.append(prop_key)
+                except bacpypes.object.PropertyError:
+                    logger.critical('Non-existent BACnet property type')
+                    sys.exit(3)
             self.add_object(device_object)
 
     def add_object(self, obj):
@@ -110,6 +102,15 @@ class BACnetApp(BIPSimpleApplication):
         self.objectIdentifier[object_identifier] = obj
         self.localDevice.objectList.append(object_identifier)
 
+    def add_property(self, prop_name, prop_value):
+        if not prop_name:
+            raise RuntimeError, "property name required"
+        if not prop_value:
+            raise RuntimeError, "property value required"
+
+        setattr(self.localDevice, prop_name, prop_value)
+        self.localDevice.propertyList.append(prop_name)
+
     def iAm(self, request, address, invoke_key, device):
         self._response = None
         return
@@ -121,30 +122,10 @@ class BACnetApp(BIPSimpleApplication):
     def whoIs(self, request, address, invoke_key, device):
         # Limits are optional (but if used, must be paired)
         execute = False
-        if (request.deviceInstanceRangeLowLimit is not None) and (request.deviceInstanceRangeHighLimit is not None):
-            if (request.deviceInstanceRangeLowLimit > self.objectIdentifier.keys()[0][1]) or (self.objectIdentifier.keys()[0][1] > request.deviceInstanceRangeHighLimit):
-                logger.info('Bacnet WhoIsRequest out of range')
-            else:
-                execute = True
-        else:
-            execute = True
-        if (execute):
-            self._response_service = 'IAmRequest'
-            self._response = IAmRequest()
-            self._response.pduDestination = GlobalBroadcast()
-
-            self._response.iAmDeviceIdentifier = self.objectIdentifier.keys()[
-                0]
-            self._response.maxAPDULengthAccepted = int(device.max_apdu_length)
-            self._response.segmentationSupported = device.segmentation_supported
-            self._response.vendorID = int(device.vendor_identifier)
-
-    def whoHas(self, request, address, invoke_key, device):
-        status = False
-        execute = False
         try:
-            if (request.deviceInstanceRangeLowLimit is not None) and (request.deviceInstanceRangeHighLimit is not None):
-                if (request.deviceInstanceRangeLowLimit > self.objectIdentifier.keys()[0][1]) or (self.objectIdentifier.keys()[0][1] > request.deviceInstanceRangeHighLimit):
+            if (request.deviceInstanceRangeLowLimit is not None) and \
+                (request.deviceInstanceRangeHighLimit is not None):
+                if (request.deviceInstanceRangeLowLimit > self.objectIdentifier.keys()[0][1] > request.deviceInstanceRangeHighLimit):
                     logger.info('Bacnet WhoHasRequest out of range')
                 else:
                     execute = True
@@ -154,103 +135,86 @@ class BACnetApp(BIPSimpleApplication):
             execute = True
 
         if (execute):
-            iterator = self.iter_objects()
-            try:
-                while True:
-                    objectit = iterator.next()
-                    objID = objectit.objectIdentifier[1]
-                    objType = objectit.objectType
-                    objName = objectit.objectName
-                    if (int(request.object.objectIdentifier[1]) == int(objID)) and (request.object.objectIdentifier[0] == objType):
-                        status = True
-                        break
-            except StopIteration:
-                pass
-            if (status):
-                self._response_service = 'IHaveRequest'
-                self._response = IHaveRequest()
-                self._response.pduDestination = GlobalBroadcast()
+            self._response_service = 'IAmRequest'
+            self._response = IAmRequest()
+            self._response.pduDestination = GlobalBroadcast()
+            self._response.iAmDeviceIdentifier = self.objectIdentifier.keys()[0]
+            self._response.maxAPDULengthAccepted = int(getattr(self.localDevice, 'maxApduLengthAccepted'))
+            self._response.segmentationSupported = getattr(self.localDevice, 'segmentationSupported')
+            self._response.vendorID = int(getattr(self.localDevice, 'vendorIdentifier'))
 
-                self._response.deviceIdentifier = self.objectIdentifier.keys()[
-                    0]
-                self._response.objectIdentifier = int(objID)
-                self._response.objectName = objName
+    def whoHas(self, request, address, invoke_key, device):
+        execute = False
+        try:
+            if (request.deviceInstanceRangeLowLimit is not None) and \
+                (request.deviceInstanceRangeHighLimit is not None):
+                if (request.deviceInstanceRangeLowLimit > self.objectIdentifier.keys()[0][1] > request.deviceInstanceRangeHighLimit):
+                    logger.info('Bacnet WhoHasRequest out of range')
+                else:
+                    execute = True
+            else:
+                execute = True
+        except AttributeError:
+            execute = True
+
+        if (execute):
+            for obj in device.objectList.value[2:]:
+                if int(request.object.objectIdentifier[1]) == obj[1] and \
+                    request.object.objectIdentifier[0] == obj[0]:
+                    objName = self.objectIdentifier[obj].objectName
+                    self._response_service = 'IHaveRequest'
+                    self._response = IHaveRequest()
+                    self._response.pduDestination = GlobalBroadcast()
+                    self._response.deviceIdentifier = self.objectIdentifier.keys()[0]
+                    self._response.objectIdentifier = obj[1]
+                    self._response.objectName = objName
+                    break
             else:
                 logger.info('Bacnet WhoHasRequest: no object found')
 
     def readProperty(self, request, address, invoke_key, device):
         # Read Property
-        status = False
-        objPropVal = None
-        objPropID = None
-        objPropType = None
-        # TODO: add support for PropertyArrayIndex handling
-        iterator = self.iter_objects()
-        try:
-            while True:
-                objectit = iterator.next()
-                objID = objectit.objectIdentifier[1]
-                objType = objectit.objectType
-                objName = objectit.objectName
-                if (int(request.objectIdentifier[1]) == int(objID)) and (request.objectIdentifier[0] == objType):
-                    for key, value in objectit._properties.items():
-                        if (key == request.propertyIdentifier):
-                            objPropID = value.identifier
-                            objPropVal = value.ReadProperty(objectit)
-                            objPropType = value.datatype()
-                            status = True
-                            break
-                    if (status):
-                        break
-                    else:
-                        logger.info('Bacnet ReadProperty: object has no property {0}'.format(
-                            request.propertyIdentifier))
-                        self._response = ErrorPDU()
+        # TODO: add support for PropertyArrayIndex handling; the Array can be found in self.localDevice.objectList
+
+        for obj in device.objectList.value[2:]:
+            if int(request.objectIdentifier[1]) == obj[1] and \
+                request.objectIdentifier[0] == obj[0]:
+                objName = self.objectIdentifier[obj].objectName
+                for prop in self.objectIdentifier[obj].properties:
+                    if request.propertyIdentifier == prop.identifier:
+                        propName = prop.identifier
+                        propValue = prop.ReadProperty(self.objectIdentifier[obj])
+                        propType = prop.datatype()
+                        self._response_service = 'ComplexAckPDU'
+                        self._response = ReadPropertyACK()
                         self._response.pduDestination = address
-                        self._response.apduInvokeID = original_invoke_id
-                        self._response.apduService = 0x0c
-                        # self._response.errorClass
-                        # self._response.errorCode
-        except StopIteration:
-            pass
-        if (status):
-            self._response_service = 'ComplexAckPDU'
-            self._response = ReadPropertyACK()
-            self._response.pduDestination = address
-            self._response.apduInvokeID = invoke_key
-            self._response.objectIdentifier = int(objID)
-            self._response.objectName = objName
-            self._response.propertyIdentifier = objPropID
+                        self._response.apduInvokeID = invoke_key
+                        self._response.objectIdentifier = obj[1]
+                        self._response.objectName = objName
+                        self._response.propertyIdentifier = propName
 
-            # TODO: make proper datatype classification and randomization
-            varlist = objPropVal.split(':')
-            if len(varlist) > 2:
-                raise ValueError, "Invalid interval in template"
-                return
-            if objPropID == 'presentValue':
-                var = round(
-                    random.uniform(float(varlist[0]), float(varlist[1])), 2)
-            else:
-                var = objPropVal
-            self._response.propertyValue = Any()
-            if isinstance(objPropType, Integer):
-                objPropVal = Integer(int(var))
-            elif isinstance(objPropType, Real):
-                objPropVal = Real(float(var))
-            elif isinstance(objPropType, CharacterString):
-                objPropVal = CharacterString(str(var))
-
-            self._response.propertyValue.cast_in(objPropVal)
-
-            # self._response.debug_contents()
-        else:
-            logger.info('Bacnet ReadProperty: no object found')
-            self._response = ErrorPDU()
-            self._response.pduDestination = address
-            self._response.apduInvokeID = original_invoke_id
-            self._response.apduService = 0x0c
-            # self._response.errorClass
-            # self._response.errorCode
+                        # get the property type
+                        for p in dir(sys.modules[propType.__module__]):
+                            _obj = getattr(sys.modules[propType.__module__], p)
+                            try:
+                                if type(propType) == _obj:
+                                    break
+                            except TypeError:
+                                pass
+                        value = ast.literal_eval(propValue)
+                        self._response.propertyValue = Any(_obj(value))
+                        #self._response.propertyValue.cast_in(objPropVal)
+                        #self._response.debug_contents()
+                        break
+                else:
+                    logger.info('Bacnet ReadProperty: object has no property {0}'.format(
+                        request.propertyIdentifier))
+                    self._response = ErrorPDU()
+                    self._response.pduDestination = address
+                    self._response.apduInvokeID = invoke_key
+                    self._response.apduService = 0x0c
+                    # self._response.errorClass
+                    # self._response.errorCode
 
     def indication(self, apdu, address, device):
         # logging the received PDU type and Service request
@@ -390,32 +354,22 @@ class BacnetServer(object):
         databus = conpot_core.get_databus()
         device_info_root = dom.xpath('//bacnet/device_info')[0]
 
-        identifier_key = device_info_root.xpath(
-            './device_identifier/text()')[0]
-        self.device_identifier = databus.get_value(identifier_key)
-
-        name_key = device_info_root.xpath('./device_name/text()')[0]
-        self.device_name = databus.get_value(name_key)
-
-        apdu_length_key = device_info_root.xpath('./max_apdu_length/text()')[0]
-        self.max_apdu_length = databus.get_value(apdu_length_key)
-
-        segmentation_key = device_info_root.xpath(
-            './segmentation_support/text()')[0]
-        self.segmentation_supported = databus.get_value(segmentation_key)
-
-        vendor_key = device_info_root.xpath(
-            './vendor_identification/text()')[0]
-        self.vendor_identifier = databus.get_value(vendor_key)
+        name_key = device_info_root.xpath('./device_name/text()')[0]       
+        id_key = device_info_root.xpath('./device_identifier/text()')[0]
+        vendor_name_key = device_info_root.xpath('./vendor_name/text()')[0]
+        vendor_identifier_key = device_info_root.xpath('./vendor_identifier/text()')[0]
+        apdu_length_key = device_info_root.xpath('./max_apdu_length_accepted/text()')[0]
+        segmentation_key = device_info_root.xpath('./segmentation_supported/text()')[0]
 
         #self.local_device_address = dom.xpath('./@*[name()="host" or name()="port"]')
 
         self.thisDevice = LocalDeviceObject(
-            objectName=self.device_name,
-            objectIdentifier=int(self.device_identifier),
-            maxApduLengthAccepted=int(self.max_apdu_length),
-            segmentationSupported=self.segmentation_supported,
-            vendorIdentifier=int(self.vendor_identifier)
+            objectName=name_key,
+            objectIdentifier=int(id_key),
+            maxApduLengthAccepted=int(apdu_length_key),
+            segmentationSupported=segmentation_key,
+            vendorName=vendor_name_key,
+            vendorIdentifier=int(vendor_identifier_key)
         )
 
         # socket initialization
@@ -427,7 +381,7 @@ class BacnetServer(object):
         # create application instance
         bacnet_app = BACnetApp(self.thisDevice, self.sock)
         # get object_list and properties
-        bacnet_app._setup(dom)
+        bacnet_app._get_objects_and_properties(dom)
 
         logger.info(
             'Conpot Bacnet initialized using the {0} template.'.format(template))

@@ -70,18 +70,6 @@
             <key name="s7_module_type">
                 <value type="value">"IM151-8 PN/DP CPU"</value>
             </key>
-            <key name="BacnetIdentifier">
-                <value type="value">"36113"</value>
-            </key>
-            <key name="BacnetApduLength">
-                <value type="value">"1024"</value>
-            </key>
-            <key name="BacnetSegmentation">
-                <value type="value">"segmentedBoth"</value>
-            </key>
-            <key name="BacnetVendor">
-                <value type="value">"15"</value>
-            </key>
             <key name="empty">
                 <value type="value">""</value>
             </key>

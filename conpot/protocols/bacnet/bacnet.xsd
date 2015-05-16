@@ -8,9 +8,11 @@
                         <xs:sequence>
                             <xs:element type="xs:string" name="device_name"/>
                             <xs:element type="xs:string" name="device_identifier"/>
-                            <xs:element type="xs:string" name="max_apdu_length"/>
-                            <xs:element type="xs:string" name="segmentation_support"/>
-                            <xs:element type="xs:string" name="vendor_identification"/>
+                            <xs:element type="xs:string" name="vendor_name"/>
+                            <xs:element type="xs:string" name="vendor_identifier"/>
+                            <xs:element type="xs:string" name="max_apdu_length_accepted"/>
+                            <xs:element type="xs:string" name="segmentation_supported"/>
+                            <xs:any processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
                         </xs:sequence>
                     </xs:complexType>
                 </xs:element>
