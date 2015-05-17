@@ -109,6 +109,9 @@ class IpmiServer(object):
             self.session = FakeSession(address[0], "", "", address[1])
             self.session.server = self
 
+            self.uuid = uuid.uuid4()
+            self.kg = None
+
             self.session.socket = self.sock
             self.sessions[address[0]] = self.session
             self.initiate_session(data, address, self.session)
@@ -179,9 +182,7 @@ class IpmiServer(object):
         logger.info('IPMI Session closed {0}'.format(self.session.sessionid))
         # cleanup procedure
         del self.sessions[self.session.sockaddr[0]]
-        self.session = None
-
-        pass
+        del self.session
 
     def _got_request(self, data, address, session):
         if data[4] in ('\x00', '\x02'):  # ipmi 1.5 payload
