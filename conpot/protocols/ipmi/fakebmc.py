@@ -1,8 +1,3 @@
-# Author: Peter Sooky <xsooky00@stud.fit.vubtr.cz>
-# Brno University of Technology, Faculty of Information Technology
-
-# using pyghmi implementation of IPMI
-
 # Copyright 2015 Lenovo
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,36 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import gevent
-from gevent import socket
-from gevent.server import DatagramServer
 
-import struct
-import os, sys
+# Author: Peter Sooky <xsooky00@stud.fit.vubtr.cz>
+# Brno University of Technology, Faculty of Information Technology
 
 import logging
 
 import pyghmi
-import pyghmi.ipmi.private.constants as constants
-
-from pyghmi.ipmi.private.session import Session
 from pyghmi.ipmi.bmc import Bmc
-
-import traceback
-import random
-import uuid
-import hmac
-import hashlib
-from Crypto.Cipher import AES
 
 
 logger = logging.getLogger()
+
 
 class FakeBmc(Bmc):
 
     def __init__(self, authdata, port):
         self.authdata = authdata
-        self.port = 6230
+        self.port = 623
         self.powerstate = 'off'
         self.bootdevice = 'default'
         logger.info('IPMI BMC initialized.')
@@ -89,4 +72,3 @@ class FakeBmc(Bmc):
     def power_shutdown(self):
         logger.info('IPMI BMC Power_Shutdown request.')
         self.powerstate = 'off'
-
